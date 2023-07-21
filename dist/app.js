@@ -19,9 +19,32 @@ class Project {
         this.status = status;
     }
 }
-class ProjectState {
+class State {
     constructor() {
         this.listeners = [];
+    }
+    addListeners(listenerFn) {
+        this.listeners.push(listenerFn);
+    }
+}
+class Component {
+    constructor(templateId, hostElementId, insertAtStart, newElementId) {
+        this.templateEle = document.getElementById(templateId);
+        this.hostEle = document.getElementById(hostElementId);
+        const importedNode = document.importNode(this.templateEle.content, true);
+        this.ele = importedNode.firstElementChild;
+        if (newElementId) {
+            this.ele.id = newElementId;
+        }
+        this.attach(insertAtStart);
+    }
+    attach(insertAtBeginning) {
+        this.hostEle.insertAdjacentElement(insertAtBeginning ? 'afterbegin' : 'beforeend', this.ele);
+    }
+}
+class ProjectState extends State {
+    constructor() {
+        super();
         this.projects = [];
     }
     static getInstance() {
@@ -37,9 +60,6 @@ class ProjectState {
             listenerFn(this.projects.slice());
         }
     }
-    addListeners(listenerFn) {
-        this.listeners.push(listenerFn);
-    }
 }
 const projectState = ProjectState.getInstance();
 function autoBind(_, _2, descriptor) {
@@ -53,19 +73,18 @@ function autoBind(_, _2, descriptor) {
     };
     return adjDescriptor;
 }
-class UserInput {
+class UserInput extends Component {
     constructor() {
-        this.templateEle = document.getElementById("project-input");
-        this.hostEle = document.getElementById("app");
-        const importedEle = document.importNode(this.templateEle.content, true);
-        this.ele = importedEle.firstElementChild;
-        this.ele.id = "user-input";
+        super("project-input", "app", true, "user-input");
         this.titleInputElement = this.ele.querySelector("#title");
         this.descInputElement = this.ele.querySelector("#description");
         this.peopleInputElement = this.ele.querySelector("#people");
         this.configure();
-        this.hostEle.insertAdjacentElement('afterbegin', this.ele);
     }
+    configure() {
+        this.ele.addEventListener('submit', this.submitHandler);
+    }
+    renderContent() { }
     submitHandler(e) {
         e.preventDefault();
         const userInput = this.getUserInput();
@@ -74,9 +93,6 @@ class UserInput {
             projectState.addProject(title, desc, peopleNum);
             this.clearUserInput();
         }
-    }
-    configure() {
-        this.ele.addEventListener('submit', this.submitHandler);
     }
     getUserInput() {
         const title = this.titleInputElement.value;
@@ -89,13 +105,13 @@ class UserInput {
         const descriptionValidatable = {
             value: desc,
             required: true,
-            minLength: 5
+            minLength: 3
         };
         const peopleValidatable = {
             value: +peopleNum,
             required: true,
             min: 1,
-            max: 5
+            max: 10
         };
         if (!this.validate(titleValidatable) ||
             !this.validate(descriptionValidatable) ||
@@ -139,15 +155,42 @@ class UserInput {
 __decorate([
     autoBind
 ], UserInput.prototype, "submitHandler", null);
-class ProjectList {
+class ProjectItem extends Component {
+    get peopleCount() {
+        return this.project.peopleNum + (this.project.peopleNum == 1 ? ' person' : ' people') + ' assigned';
+    }
+    constructor(hostId, project) {
+        super("single-project", hostId, true, project.id);
+        this.project = project;
+        this.configure();
+        this.renderContent();
+    }
+    configure() { }
+    renderContent() {
+        this.ele.querySelector('h2').textContent = this.project.title;
+        this.ele.querySelector('h3').textContent = this.peopleCount;
+        this.ele.querySelector('p').textContent = this.project.desc;
+    }
+}
+class ProjectList extends Component {
     constructor(type) {
+        super("project-list", "app-section", false, `${type}-projects`);
         this.type = type;
-        this.templateEle = document.getElementById("project-list");
-        this.hostEle = document.getElementById("app-section");
         this.assignedProjects = [];
-        const importedEle = document.importNode(this.templateEle.content, true);
-        this.ele = importedEle.firstElementChild;
-        this.ele.id = `${this.type}-projects`;
+        this.configure();
+        this.renderContent();
+    }
+    renderContent() {
+        const listId = `${this.type}-projects-list`;
+        this.ele.querySelector('ul').id = listId;
+        this.ele.querySelector('h2').textContent = this.type.toUpperCase() + ' PROJECTS';
+    }
+    renderProjects() {
+        if (this.assignedProjects.length) {
+            new ProjectItem(this.ele.querySelector('ul').id, this.assignedProjects[this.assignedProjects.length - 1]);
+        }
+    }
+    configure() {
         projectState.addListeners((projects) => {
             const filteredProjects = projects.filter(project => {
                 if (this.type === 'active') {
@@ -157,25 +200,9 @@ class ProjectList {
                     return project.status === ProjectStatus.Finished;
                 }
             });
-            console.log(filteredProjects);
             this.assignedProjects = filteredProjects;
             this.renderProjects();
         });
-        this.hostEle.insertAdjacentElement('beforeend', this.ele);
-        this.renderContent();
-    }
-    renderContent() {
-        const listId = `${this.type}-projects-list`;
-        this.ele.querySelector('ul').id = listId;
-        this.ele.querySelector('h2').textContent = this.type.toUpperCase() + ' PROJECTS';
-    }
-    renderProjects() {
-        const listEl = document.getElementById(`${this.type}-projects-list`);
-        if (this.assignedProjects.length) {
-            const listItem = document.createElement('li');
-            listItem.textContent = this.assignedProjects[this.assignedProjects.length - 1].title;
-            listEl.appendChild(listItem);
-        }
     }
 }
 const userInput = new UserInput();
