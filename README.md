@@ -1,1 +1,1 @@
-# drag-and-drop-app-typescript
+# drag-and-drop-typescript-app
